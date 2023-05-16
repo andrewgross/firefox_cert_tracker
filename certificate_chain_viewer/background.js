@@ -1,23 +1,35 @@
-function logCertificateChain(details) {
-    const { requestId, url, responseHeaders } = details;
-    console.log(`Checking certificate chain for ${url}:`)
-    if (responseHeaders) {
-        responseHeaders.map(header => console.log(`${header.name}: ${header.value}`));
-        const certificateChain = responseHeaders.filter(
-            header => header.name.toLowerCase() === "x-serviceworker-proxy-ca"
-        );
+browser.webRequest.onHeadersReceived.addListener(
+    checkAndSaveCertificate,
+    { urls: ["<all_urls>"], types: ['main_frame'] },
+    ["blocking"]
+);
 
-        if (certificateChain.length > 0) {
-            console.log(`Certificate chain for ${url}:`);
-            console.log(certificateChain[0].value);
+async function checkAndSaveCertificate(details) {
+    let securityInfo = await browser.webRequest.getSecurityInfo(details.requestId, { certificateChain: true });
+    if (securityInfo.state === "secure" || securityInfo.state === "weak") {
+        let certInfo = [];
+        for (let cert of securityInfo.certificates) {
+            certInfo.push(cert.subject);
         }
-    }
 
-    return {};
+        // Check if certificate information for the URL is already stored
+        browser.storage.local.get(details.url)
+            .then((storedCerts) => {
+                if (storedCerts[details.url] && !isEqual(certInfo, storedCerts[details.url])) {
+                    console.log(`Certificate chain for ${details.url} has changed.`);
+                    alert(`Certificate chain for ${details.url} has changed.`);
+                }
+                // Save to local storage
+                browser.storage.local.set({ [details.url]: certInfo })
+                    .then(() => console.log(`Saved certificate chain for ${details.url}`))
+                    .catch(e => console.error(`Error saving certificate chain for ${details.url}: ${e}`));
+            });
+    } else {
+        console.log(`Connection to ${details.url} is not secure.`);
+    }
 }
 
-browser.webRequest.onHeadersReceived.addListener(
-    logCertificateChain,
-    { urls: ["<all_urls>"] },
-    ["responseHeaders"]
-);
+// Function to compare two arrays
+function isEqual(arr1, arr2) {
+    return JSON.stringify(arr1.sort()) === JSON.stringify(arr2.sort());
+}
