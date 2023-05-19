@@ -1,4 +1,4 @@
-## Firefox Cert Track
+## Firefox Cert Tracker
 
 A simple browser extension to track cert chains for HTTPS websites and alert when they change.
 
